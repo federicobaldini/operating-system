@@ -3,37 +3,6 @@ name = "operating-system"
 version = "0.1.0"
 edition = "2021"
 
-# Language items are special functions and types that are required internally by the compiler.
-# For example, the Copy trait is a language item that tells the compiler which types have copy semantics.
-# When we look at the implementation, we see it has the special #[lang = "copy"] attribute that defines
-# it as a language item.
-
-# While providing custom implementations of language items is possible, it should only be done as a last
-# resort. The reason is that language items are highly unstable implementation details and not even type
-# checked (so the compiler doesn’t even check if a function has the right argument types). Fortunately,
-# there is a more stable way to fix the above language item error.
-
-# The eh_personality language item marks a function that is used for implementing stack unwinding.
-# By default, Rust uses unwinding to run the destructors of all live stack variables in case of a panic.
-# This ensures that all used memory is freed and allows the parent thread to catch the panic and continue
-# execution. Unwinding, however, is a complicated process and requires some OS-specific libraries
-# (e.g. libunwind on Linux or structured exception handling on Windows), so I don’t want to use it for
-# our operating system.
-
-# Disabling Unwinding
-# There are other use cases as well for which unwinding is undesirable, so Rust provides an option to abort
-# on panic instead. This disables the generation of unwinding symbol information and thus considerably
-# reduces binary size. There are multiple places where we can disable unwinding. The easiest way is to add
-# the following lines to our Cargo.toml:
-
-# the profile used for `cargo build`
-[profile.dev]
-panic = "abort" # disable stack unwinding on panic
-
-# the profile used for `cargo build --release`
-[profile.release]
-panic = "abort" # disable stack unwinding on panic
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
