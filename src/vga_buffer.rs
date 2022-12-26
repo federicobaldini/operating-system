@@ -1,6 +1,16 @@
 use core::fmt;
+use lazy_static::lazy_static;
 use volatile::Volatile;
 
+lazy_static! {
+    // A global "Writer" instance that can be used for printing to the VGA text buffer.
+    // Used by the "print!" and "println!" macros.
+    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
+        column_position: 0,
+        color_code: ColorCode::new(Color::Yellow, Color::Black),
+        buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
+    });
+}
 
 // The standard color palette in VGA text mode.
 #[allow(dead_code)]
