@@ -1,9 +1,8 @@
 use core::fmt;
 use volatile::Volatile;
 
-const BUFFER_HEIGHT: usize = 25;
-const BUFFER_WIDTH: usize = 80;
 
+// The standard color palette in VGA text mode.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 // [repr(u8)] attribute, means that each enum variant is stored as a u8.
@@ -27,46 +26,49 @@ pub enum Color {
   White = 15,
 }
 
+// A combination of a foreground and a background color.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
-// The ColorCode struct contains the full color byte, containing foreground and background color.
 struct ColorCode(u8);
 
 impl ColorCode {
+  // Create a new "ColorCode" with the given foreground and background colors.
   fn new(foreground: Color, background: Color) -> ColorCode {
     ColorCode((background as u8) << 4 | (foreground as u8))
   }
 }
 
+// A screen character in the VGA text buffer, consisting of an ASCII character and a "ColorCode".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// [repr(C)] guarantees that the struct’s fields are laid out exactly like in a C struct
-// and thus guarantees the correct field ordering.
 #[repr(C)]
 struct ScreenChar {
   ascii_character: u8,
   color_code: ColorCode,
 }
 
-// [repr(transparent)] ensure that the struct has the same memory layout as its single field.
+// The height of the text buffer (normally 25 lines).
+const BUFFER_HEIGHT: usize = 25;
+// The width of the text buffer (normally 80 columns).
+const BUFFER_WIDTH: usize = 80;
+
+// A structure representing the VGA text buffer.
 #[repr(transparent)]
 struct Buffer {
   chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT], // Text buffer.
 }
 
+// A writer type that allows writing ASCII bytes and strings to an underlying "Buffer".
+// Wraps lines at "BUFFER_WIDTH". Supports newline characters and implements the
+// "core::fmt::Write" trait.
 pub struct Writer {
   column_position: usize, // Keeps track of the current position in the last row.
   color_code: ColorCode,  // The current foreground and background colors.
   buffer: &'static mut Buffer, // Reference to the VGA buffer.
 }
 
-impl fmt::Write for Writer {
-  fn write_str(&mut self, s: &str) -> fmt::Result {
-    self.write_string(s);
-    Ok(())
-  }
-}
-
 impl Writer {
+  // Writes an ASCII byte to the buffer.
+  // Wraps lines at "BUFFER_WIDTH". Supports the "\n" newline character.
   pub fn write_byte(&mut self, byte: u8) {
     match byte {
       b'\n' => self.new_line(),
@@ -88,6 +90,22 @@ impl Writer {
     }
   }
 
+  // Writes the given ASCII string to the buffer.
+  // Wraps lines at "BUFFER_WIDTH". Supports the "\n" newline character. Does **not**
+  // support strings with non-ASCII characters, since they can't be printed in the VGA text
+  // mode.
+  pub fn write_string(&mut self, s: &str) {
+    for byte in s.bytes() {
+      match byte {
+        // printable ASCII byte or newline
+        0x20..=0x7e | b'\n' => self.write_byte(byte),
+        // not part of printable ASCII range
+        _ => self.write_byte(0xfe),
+      }
+    }
+  }
+
+  // Shifts all lines one line up and clears the last row.
   fn new_line(&mut self) {
     for row in 1..BUFFER_HEIGHT {
       for col in 0..BUFFER_WIDTH {
@@ -99,7 +117,7 @@ impl Writer {
     self.column_position = 0;
   }
 
-  // This method clears a row by overwriting all of its characters with a space character.
+  // Clears a row by overwriting it with blank characters.
   fn clear_row(&mut self, row: usize) {
     let blank = ScreenChar {
       ascii_character: b' ',
@@ -109,16 +127,12 @@ impl Writer {
       self.buffer.chars[row][col].write(blank);
     }
   }
+}
 
-  pub fn write_string(&mut self, s: &str) {
-    for byte in s.bytes() {
-      match byte {
-        // printable ASCII byte or newline
-        0x20..=0x7e | b'\n' => self.write_byte(byte),
-        // not part of printable ASCII range
-        _ => self.write_byte(0xfe),
-      }
-    }
+impl fmt::Write for Writer {
+  fn write_str(&mut self, s: &str) -> fmt::Result {
+    self.write_string(s);
+    Ok(())
   }
 }
 
